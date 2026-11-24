@@ -89,7 +89,7 @@ button{padding:9px 12px;border:1px solid #d4ddd7;border-radius:8px;cursor:pointe
   <button id="dalenBtn" type="button">Dalen</button>
   <button id="gaupneBtn" type="button">Gaupne</button>
   <button id="korgenBtn" type="button">Korgen</button>
-  <button id="snowBtn" type="button" aria-pressed="false" title="Åpne satellittobservasjoner fra Copernicus Browser (Sentinel-2)">🛰 Satellittsnø</button>
+  <button id="snowBtn" type="button" aria-pressed="false" title="Åpne dagens snødybdekart fra SeNorge">❄ Snødybde nå</button>
 </div>
   
 <div class="mapwrap">
@@ -504,11 +504,10 @@ document.getElementById('saudaBtn').addEventListener('click', showSauda);
 document.getElementById('dalenBtn').addEventListener('click', showDalen);
 document.getElementById('gaupneBtn').addEventListener('click', showGaupne);
 document.getElementById('korgenBtn').addEventListener('click', showKorgen);
-// Åpne ekte satellittbilder i Copernicus Browser. Sentinel-2 kan vise
-// snødekke på skyfrie dager, men gir ikke automatisk en verifisert snøgrense.
-// Ingen modellert SeNorge-snødybde brukes.
+// SeNorge viser oppdaterte modellberegninger av snødybde.
+// Åpnes i egen fane for å unngå å miste valgt område i kraftverkskartet.
 document.getElementById('snowBtn').addEventListener('click', () => {
-  window.open('https://browser.dataspace.copernicus.eu/', '_blank', 'noopener,noreferrer');
+  window.open('https://www.senorge.no/', '_blank', 'noopener,noreferrer');
 });
 
 function renderList() {
