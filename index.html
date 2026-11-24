@@ -1,0 +1,80 @@
+<!DOCTYPE html><html lang="no"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Værkart Norge – MET og Vegvesenet</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,Segoe UI,sans-serif}#map{height:100vh;width:100%;background:#eef3f8}button,input{font:inherit}.controls{position:absolute;z-index:1000;top:94px;right:12px;width:min(345px,calc(100vw - 24px));background:#fff;box-shadow:0 2px 16px #0003;border-radius:12px;padding:13px;max-height:calc(100vh - 108px);overflow:auto}.controls h1{font-size:17px;margin:0 0 9px}.controls h2{font-size:14px;margin:12px 0 6px}.checks{display:flex;gap:15px;flex-wrap:wrap}.checks label{cursor:pointer}.client{display:flex;gap:6px;margin:8px 0}.client input{min-width:0;flex:1;padding:8px;border:1px solid #bcc8d8;border-radius:8px}.controls button{border:1px solid #a9bad0;border-radius:8px;background:#f3f6fa;padding:7px 10px;cursor:pointer}.controls button:hover{background:#e2edf8}.status{font-size:12px;color:#425069;white-space:pre-line;line-height:1.5;margin:8px 0}.stations-note{font-size:12px;color:#5b6876}.pillrow{display:flex;gap:5px;justify-content:center}.pill{border:3px solid white;border-radius:999px;padding:5px 10px;color:white;font-weight:750;font-size:15px;white-space:nowrap;box-shadow:0 1px 4px #0004;background:#c94b31;min-width:83px;text-align:center}.pill.road{background:#a65c24}.pill.negative{background:#1765c1}.pill.missing{background:#697586}.pill-label{font-size:10px;text-align:center;background:white;border-radius:5px;padding:1px 4px;margin-bottom:3px;color:#152239;font-weight:750}.labelrow{display:flex;gap:5px;justify-content:center}.station-icon{background:transparent;border:0}.station-name{margin:4px auto 0;background:white;border-radius:7px;padding:3px 7px;font-size:12px;line-height:1.25;max-width:208px;text-align:center;box-shadow:0 1px 4px #0002}.station-name strong{display:block}.station-name small{color:#596679}.station-marker{width:220px;transform:translateX(0)}.temperature-item{min-width:85px}.region-item{border-top:1px solid #dce3ec;padding:9px 0;font-size:13px}.region-item strong{font-size:14px}.region-item .answer{font-size:19px;font-weight:800;color:#164c75}.muted{font-size:11px;color:#596679;line-height:1.4}.controls .snow-button{margin-top:8px;width:100%;font-weight:700}.snow-panel[hidden]{display:none}.radio-line{font-size:12px;display:flex;gap:9px;align-items:center;margin:5px 0}.leaflet-popup-content{line-height:1.5}.mapkey{position:absolute;left:9px;bottom:23px;z-index:900;background:#fffffff0;border-radius:8px;padding:8px;font-size:11px;max-width:285px}.error{color:#a32424}.line{margin-top:7px;border-top:1px solid #e0e5ee;padding-top:7px}@media(max-width:600px){.controls{width:min(290px,calc(100vw - 20px))}.mapkey{max-width:185px}}
+</style></head><body><div id="map"></div>
+<section class="controls"><h1>🌡️ Værkart Norge</h1><div class="checks"><label><input type="checkbox" id="metOn" checked> MET</label><label><input type="checkbox" id="vegOn" checked> Vegvesenet</label></div>
+<p class="muted">Temperaturene hentes via en egen server. Frost Client ID oppbevares kun der, ikke i dette kartet.</p>
+<div class="client"><input id="apiUrl" type="url" placeholder="https://din-server.onrender.com" aria-label="Adresse til Python-server"><button id="saveApi">Lagre</button></div>
+<div><button id="loadMet">Hent MET</button> <button id="loadVeg">Hent Vegvesenet</button> <button id="reload">Oppdater begge</button></div>
+<div class="status" id="status">Velg kilder og hent data. Vegvesenet forsøkes lastet automatisk.</div>
+<button class="snow-button" id="snowToggle" aria-expanded="false">❄ Snøgrense ▾</button><div class="snow-panel" id="snowPanel" hidden>
+<h2>Beregningsmåte</h2><label class="radio-line"><input name="gradient" type="radio" value="9.8" checked> Tørradiabatisk – 9,8 °C / 1000 m</label><label class="radio-line"><input name="gradient" type="radio" value="6"> Fuktigadiabatisk – 6,0 °C / 1000 m</label>
+<p class="muted">Gjelder bare <b>lufttemperatur</b>. Bruker målinger fra de siste 3 timene og stasjoner med kjent høyde. Hver region beregnes separat. Snøgrense betyr her estimert 0 °C-nivå, ikke observert snøfall.</p>
+<div id="regions"></div><div class="line muted"><b>Områdegrenser:</b> Sør-Norge sør for 62°N, øst/vest delt ved Hovdens lengdegrad 7,3713°Ø. Midt-Norge 62–65,5°N. Nord-Norge nord for 65,5°N. Dette er forenklede geografiske inndelinger og kan tilpasses.</div>
+</div><div class="stations-note">Kilder: MET Frost / Statens vegvesen. Offisiell moh. vises bare når kilden oppgir den. API-adressen lagres i nettleseren din. Ukjent moh. markeres tydelig.</div></section>
+<div class="mapkey"><b>Fargeforklaring</b><div>Luft: <span style="color:#c94b31">● rød</span> over 0 °C</div><div>Vegbane: <span style="color:#a65c24">● brun</span> over 0 °C</div><div>Begge: <span style="color:#1765c1">● blå</span> 0 °C og kaldere</div>Vegbanetemperatur står alltid til høyre.</div>
+<script>
+window.addEventListener('error', function(e) {
+  const status = document.getElementById('status');
+  if (status) status.textContent = 'Feil ved lasting av kart: ' + (e.message || 'ukjent feil') + '. Trykk F12 og sjekk Console.';
+});
+</script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" onerror="var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js';document.head.appendChild(s);"></script><script>
+const byId=id=>document.getElementById(id), sources={met:[],veg:[]}, errors={met:'',veg:''};
+// GitHub Pages: Sett inn adressen til den utplasserte backend-serveren her
+// eller fyll den inn i feltet på selve kartet. ALDRI skriv Client ID her.
+const DEFAULT_API_URL = '';
+const savedApiUrl=()=> (localStorage.getItem('vaerkart_api_url') || DEFAULT_API_URL).replace(/\/$/,'');
+const apiPath=path => savedApiUrl() + path;
+byId('apiUrl').value=savedApiUrl();
+byId('saveApi').onclick=()=>{
+  const val=byId('apiUrl').value.trim().replace(/\/$/,'');
+  if(val && !/^https:\/\/i.test(val) && !/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(val)){
+    alert('Bruk https:// for offentlig backend (eller http://localhost ved lokal testing).');return;
+  }
+  localStorage.setItem('vaerkart_api_url',val);
+  alert('Serveradresse lagret. Hent nå data med knappene.');
+};
+const fmt=n=>Number.isFinite(n)?(n>0?'+':'')+n.toLocaleString('nb-NO',{minimumFractionDigits:1,maximumFractionDigits:1})+' °C':'–';
+const elev=n=>Number.isFinite(n)?Math.round(n).toLocaleString('nb-NO')+' moh.':'høyde ukjent';
+const escapeHtml=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function startWeatherMap() {
+if (typeof L === 'undefined') {
+  document.getElementById('status').textContent = 'Leaflet-kartbiblioteket kunne ikke lastes. Sjekk internett, DNS og eventuelle blokkeringer av unpkg.com og cdn.jsdelivr.net.';
+  return;
+}
+const map=L.map('map',{zoomControl:false}).setView([64.1,12.6],5);L.control.zoom({position:'topright'}).addTo(map);
+L.tileLayer('https://basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{maxZoom:19,attribution:'© OpenStreetMap-bidragsytere © CARTO'}).addTo(map);
+const layers={met:L.layerGroup().addTo(map),veg:L.layerGroup().addTo(map)};
+function region(s){if(s.lat<62)return s.lon<7.371279?'sorvest':'sorost';if(s.lat<65.5)return 'midt';return 'nord'}
+const regions=[['sorost','Sør-Norge øst for Hovden'],['sorvest','Sør-Norge vest for Hovden'],['midt','Midt-Norge'],['nord','Nord-Norge']];
+function observationAge(s){const date=Date.parse(String(s.time||'').replace(/\[[^\]]+\]/g,''));return Number.isFinite(date)?(Date.now()-date)/3600000:Infinity}
+function live(s){const age=observationAge(s);return age>=-0.3&&age<=3}
+function badge(value,road){let state=!Number.isFinite(value)?'missing':value<=0?'negative':road?'road':'';return `<div class="temperature-item"><div class="pill-label">${road?'Vegbane':'Luft'}</div><div class="pill ${state}">${fmt(value)}</div></div>`}
+function redraw(){for(const key of ['met','veg']){const layer=layers[key];layer.clearLayers();if(!byId(key+'On').checked)continue;
+ for(const s of sources[key]){if(!Number.isFinite(s.lat)||!Number.isFinite(s.lon))continue;
+ const html=`<div class="station-marker"><div class="pillrow">${badge(s.air,false)}${key==='veg'?badge(s.road,true):''}</div><div class="station-name"><strong>${escapeHtml(s.name)}</strong><small>${elev(s.elevation)}</small></div></div>`;
+ const icon=L.divIcon({className:'station-icon',html,iconSize:[220,90],iconAnchor:[110,88],popupAnchor:[0,-83]});
+ const popup=`<b>${escapeHtml(s.name)}</b><br>Kilde: ${key==='met'?'MET / Frost':'Statens vegvesen'}<br>Høyde: ${elev(s.elevation)}<br>${s.elevationSource?'Høydekilde: '+escapeHtml(s.elevationSource)+'<br>':''}Luft: ${fmt(s.air)}<br>${key==='veg'?'Vegbane: '+fmt(s.road)+'<br>':''}Måletid: ${escapeHtml(s.time||'Ukjent')}<br>${live(s)?'Måling høyst 3 timer gammel':'Eldre / ukjent tidsstempel'}`;
+ L.marker([s.lat,s.lon],{icon}).bindPopup(popup).addTo(layer);
+ }}updateRegions();updateStatus()}
+function updateRegions(){const pool=[...byId('metOn').checked?sources.met:[],...byId('vegOn').checked?sources.veg:[]];const rate=Number(document.querySelector('input[name="gradient"]:checked').value);
+byId('regions').innerHTML=regions.map(([id,name])=>{const all=pool.filter(s=>region(s)===id&&Number.isFinite(s.air)&&live(s));const lowest=[...all].sort((a,b)=>a.air-b.air)[0];const valid=all.filter(s=>Number.isFinite(s.elevation));const meanT=valid.length?valid.reduce((a,s)=>a+s.air,0)/valid.length:null;const meanH=valid.length?valid.reduce((a,s)=>a+s.elevation,0)/valid.length:null;const freezing=valid.length?Math.round(meanH+meanT/rate*1000):null;return `<div class="region-item"><strong>${name}</strong><div class="answer">${freezing===null?'Kan ikke beregnes':freezing.toLocaleString('nb-NO')+' moh.'}</div><div class="muted">${valid.length} stasjoner med lufttemperatur og høyde · snittluft ${fmt(meanT)} · snitthøyde ${elev(meanH)}</div><div>Laveste observerte lufttemperatur: <b>${lowest?fmt(lowest.air):'ingen fersk måling'}</b></div>${lowest?`<div class="muted">${escapeHtml(lowest.name)} · ${elev(lowest.elevation)} · ${escapeHtml(lowest.time||'tid ukjent')} (uten høydeberegning)</div>`:''}</div>`}).join('')}
+function updateStatus(){const lines=['MET: '+sources.met.length+' stasjoner med tilgjengelig lufttemperatur'+(errors.met?' — '+errors.met:''),'Vegvesenet: '+sources.veg.length+' stasjoner ('+sources.veg.filter(s=>Number.isFinite(s.elevation)).length+' med offisiell høyde)'+(errors.veg?' — '+errors.veg:''),'Kartet viser alle mottatte stasjoner fra påslåtte kilder. Snøgrense bruker bare ferske luftmålinger med kjent moh.'];byId('status').textContent=lines.join('\n');byId('status').classList.toggle('error',!!(errors.met||errors.veg))}
+async function loadVeg(){errors.veg='';byId('status').textContent='Henter Vegvesenets målinger ...';try{const response=await fetch(apiPath('/api/veg'));const data=await response.json();if(!response.ok)throw Error(data.error||'HTTP '+response.status);sources.veg=data.stations||[];errors.veg=data.warning||''}catch(e){errors.veg=e.message}redraw()}
+async function loadMet(){errors.met='';byId('status').textContent='Henter MET 2 m lufttemperatur ...';try{const response=await fetch(apiPath('/api/met'));const data=await response.json();if(!response.ok)throw Error(data.error||'HTTP '+response.status);sources.met=data.stations||[];errors.met=data.warning||(!sources.met.length?'Ingen ferske MET-observasjoner mottatt.':'')}catch(e){errors.met=e.message+' (kontroller serveradresse, CORS og FROST_CLIENT_ID)'}redraw()}
+byId('loadVeg').onclick=loadVeg;byId('loadMet').onclick=loadMet;byId('reload').onclick=()=>{loadVeg();loadMet()};for(const id of ['metOn','vegOn'])byId(id).addEventListener('change',redraw);
+for(const e of document.querySelectorAll('input[name="gradient"]'))e.addEventListener('change',updateRegions);
+byId('snowToggle').onclick=()=>{let p=byId('snowPanel');p.hidden=!p.hidden;byId('snowToggle').setAttribute('aria-expanded',String(!p.hidden))};
+redraw();if(savedApiUrl() || location.hostname === 'localhost' || location.hostname === '127.0.0.1'){loadVeg();loadMet()}else{byId('status').textContent='Fyll inn HTTPS-adressen til Python-serveren, trykk Lagre, og hent data.'}setInterval(()=>{if(savedApiUrl() || location.hostname === 'localhost' || location.hostname === '127.0.0.1'){loadVeg();loadMet()}},600000);
+}
+
+let leafletAttempts = 0;
+function waitForLeaflet() {
+  if (window.L || leafletAttempts++ > 50) { startWeatherMap(); return; }
+  setTimeout(waitForLeaflet, 100);
+}
+waitForLeaflet();
+</script></body></html>
